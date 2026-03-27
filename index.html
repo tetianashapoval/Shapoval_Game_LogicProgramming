@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<title>Шаховий розв'язувач матів</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Arial,sans-serif;background:#1a1a2e;color:#eee;display:flex;flex-direction:column;align-items:center;padding:16px}
+h1{color:#e0c88a;font-size:22px;margin-bottom:16px}
+.main{display:flex;gap:20px;align-items:flex-start}
+.board-wrap{display:flex;align-items:flex-start}
+.rank-col{display:flex;flex-direction:column;width:20px;margin-right:2px}
+.rank-col span{height:64px;line-height:64px;text-align:center;color:#888;font-size:12px}
+.board-col{display:flex;flex-direction:column}
+.board{display:grid;grid-template-columns:repeat(8,64px);grid-template-rows:repeat(8,64px);border:2px solid #555}
+.file-row{display:flex;margin-top:4px}
+.file-row span{width:64px;text-align:center;color:#888;font-size:12px}
+.cell{width:64px;height:64px;display:flex;align-items:center;justify-content:center;font-size:40px;cursor:pointer;user-select:none;position:relative}
+.light{background:#f0d9b5}.dark{background:#b58863}
+.selected{background:#f6f669!important}
+.last-move{background:#cdd16e!important}
+.hint::after{content:'';position:absolute;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,.25);pointer-events:none}
+.hint-capture{box-shadow:inset 0 0 0 5px rgba(0,0,0,.35)}
+.panel{width:280px;display:flex;flex-direction:column;gap:10px}
+.card{background:#2a2a3e;border-radius:10px;padding:14px}
+.card h2{font-size:11px;color:#888;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px}
+.tgroup{display:flex;gap:6px;flex-wrap:wrap}
+.tbtn{padding:6px 10px;border:1px solid #444;background:#1a1a2e;color:#aaa;border-radius:6px;cursor:pointer;font-size:12px;transition:all .2s}
+.tbtn.active{border-color:#e0c88a;color:#e0c88a;background:#2a2a1e}
+.status-turn{font-size:16px;font-weight:bold;margin-bottom:4px}
+.status-msg{font-size:12px;color:#aaa;min-height:16px}
+.btn{width:100%;padding:8px;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:bold;margin-top:5px}
+.btn:hover{opacity:.85}
+.bg{background:#4caf50;color:#fff}.bb{background:#4a90d9;color:#fff}
+.by{background:#e0c88a;color:#1a1a2e}.br{background:#c0392b;color:#fff}
+.bgr{background:#555;color:#fff}
+input[type=text]{width:100%;padding:6px;background:#1a1a2e;border:1px solid #444;border-radius:5px;color:#eee;font-size:11px;margin-top:4px}
+.history{max-height:100px;overflow-y:auto;font-size:12px;color:#aaa;line-height:1.8}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px}
+.dp{background:#e0c88a}.dpy{background:#4a90d9}
+
+
+.modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.7);z-index:100;align-items:center;justify-content:center}
+
+.modal.show{display:flex}
+
+.modal-box{background:#2a2a3e;border-radius:16px;padding:40px;text-align:center;border:2px solid #e0c88a;max-width:400px}
+
+.modal-box h2{font-size:28px;color:#e0c88a;margin-bottom:12px}
+
+.modal-box p{font-size:16px;color:#aaa;margin-bottom:24px}
+
+.modal-box button{padding:10px 30px;background:#e0c88a;color:#1a1a2e;border:none;border-radius:8px;font-size:16px;font-weight:bold;cursor:pointer}
+
+</style>
+</head>
+<body>
+<h1>&#9813; Шаховий розв'язувач матів</h1>
+<div class="main">
+<div class="board-wrap">
+  <div class="rank-col" id="ranks"></div>
+  <div class="board-col">
+    <div class="board" id="board"></div>
+    <div class="file-row" id="files"></div>
+  </div>
+</div>
+<div class="panel">
+
+<div class="card">
+<h2>Сервер</h2>
+<div class="tgroup">
+<button class="tbtn active" id="srv-p" onclick="setSrv('prolog')"><span class="dot dp"></span>Prolog :8080</button>
+<button class="tbtn" id="srv-py" onclick="setSrv('python')"><span class="dot dpy"></span>Python :8081</button>
+</div></div>
+<div class="card">
+<h2>Режим гри</h2>
+<div class="tgroup">
+<button class="tbtn active" id="mode-puzzle" onclick="setMode('puzzle')">&#128269; Задача</button>
+<button class="tbtn" id="mode-hvh" onclick="setMode('hvh')">&#9876; Людина vs Людина</button>
+<button class="tbtn" id="mode-hvp" onclick="setMode('hvp')">&#9876; Людина vs Prolog</button>
+<button class="tbtn" id="mode-pvp" onclick="setMode('pvp')">&#129302; Prolog vs Prolog</button>
+</div></div>
+<div class="card">
+<h2>Глибина пошуку</h2>
+<div class="tgroup">
+<button class="tbtn active" id="d-2" onclick="setN(2)">2 ходи (3 пів-ходи)</button>
+<button class="tbtn" id="d-3" onclick="setN(3)">3 ходи (5 пів-ходів)</button>
+<button class="tbtn" id="d-4" onclick="setN(4)">4 ходи (7 пів-ходів)</button>
+</div></div>
+<div class="card">
+<h2>Стан гри</h2>
+<div class="status-turn" id="sturn">&#9812; Хід білих</div>
+<div class="status-msg" id="smsg">Готово</div>
+</div>
+<div class="card" id="puzzle-panel">
+<h2>Задача (FEN)</h2>
+<input type="text" id="fen-in" value="3qk2r/pp4p1/5Pn1/4p3/2B3Q1/4p3/PPP2PPP/R3K2R b KQkq - 0 14">
+<button class="btn bb" onclick="loadFen()">Завантажити позицію</button>
+<button class="btn by" onclick="findMate()">&#128269; Знайти мат!</button>
+</div>
+<div class="card">
+<h2>Керування</h2>
+<button class="btn bg" onclick="newGame()">&#9654; Нова гра</button>
+<button class="btn bgr" onclick="undoMove()">&#8592; Скасувати хід</button>
+<button class="btn br" onclick="resign()">&#9873; Здатися</button>
+</div>
+<div class="card">
+<h2>Історія ходів</h2>
+<div class="history" id="hist"></div>
+</div>
+</div></div>
+<div class="modal" id="modal">
+
+  <div class="modal-box">
+
+    <h2 id="modal-title">&#127942; Перемога!</h2>
+
+    <p id="modal-text">Білі виграли!</p>
+
+    <button onclick="closeModal()">OK</button>
+
+  </div>
+
+</div>
+
+<script>
+const P={wk:"\u2654",wq:"\u2655",wr:"\u2656",wb:"\u2657",wn:"\u2658",wp:"\u2659",bk:"\u265A",bq:"\u265B",br:"\u265C",bb:"\u265D",bn:"\u265E",bp:"\u265F"};
+let fen="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+let sel=null,hints=[],hist=[],fenHist=[fen],srv="http://localhost:8080",N=2,mode="puzzle",busy=false,lastMove=null;
+
+function setSrv(s){srv=s==="prolog"?"http://localhost:8080":"http://localhost:8081";["srv-p","srv-py"].forEach(id=>document.getElementById(id).classList.remove("active"));document.getElementById("srv-"+(s==="prolog"?"p":"py")).classList.add("active");msg("Сервер: "+(s==="prolog"?"Prolog":"Python"));if(s==="prolog"){document.getElementById("mode-hvp").textContent="x Людина vs Prolog";document.getElementById("mode-pvp").textContent="Prolog vs Prolog";}else{document.getElementById("mode-hvp").textContent="x Людина vs Python";document.getElementById("mode-pvp").textContent="Python vs Python";}}
+function setN(n){N=n;[2,3,4].forEach(i=>document.getElementById("d-"+i).classList.remove("active"));document.getElementById("d-"+n).classList.add("active");}
+function setMode(m){mode=m;["puzzle","hvh","hvp","pvp"].forEach(x=>document.getElementById("mode-"+x).classList.remove("active"));document.getElementById("mode-"+m).classList.add("active");busy=false;if(m==="pvp")setTimeout(pvpStep,500);}
+
+async function post(path,body){const r=await fetch(srv+path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});return r.json();}
+
+function fenBoard(f){
+  const rows=f.split(" ")[0].split("/"),board=new Array(64).fill(null);
+  for(let i=0;i<8;i++){const rank=7-i;let file=0;for(const ch of rows[i]){if("12345678".includes(ch))file+=+ch;else{board[rank*8+file]=(ch===ch.toUpperCase()?"w":"b")+ch.toLowerCase();file++;}}}
+  return board;
+}
+function sq(board,col,row){return board[(row-1)*8+(col-1)];}
+
+function render(){
+  const board=fenBoard(fen),el=document.getElementById("board");
+  el.innerHTML="";
+  for(let rank=8;rank>=1;rank--){
+    for(let file=1;file<=8;file++){
+      const d=document.createElement("div");
+      d.className="cell "+((rank+file)%2===0?"dark":"light");
+      if(lastMove&&((file===lastMove.fc&&rank===lastMove.fr)||(file===lastMove.tc&&rank===lastMove.tr)))d.classList.add("last-move");
+      if(sel&&sel[0]===file&&sel[1]===rank)d.classList.add("selected");
+      const h=hints.find(m=>m.tc===file&&m.tr===rank);
+      if(h){sq(board,file,rank)?d.classList.add("hint-capture"):d.classList.add("hint");}
+      const s=sq(board,file,rank);
+      if(s){d.textContent=P[s]||"?";d.style.color=s[0]==="w"?"#fff":"#1a1a1a";if(s[0]==="w")d.style.textShadow="0 1px 3px rgba(255,255,255,.5)";}
+      d.onclick=()=>click(file,rank);
+      el.appendChild(d);
+    }
+  }
+  // ranks
+  const rc=document.getElementById("ranks");rc.innerHTML="";
+  for(let r=8;r>=1;r--){const s=document.createElement("span");s.textContent=r;rc.appendChild(s);}
+  // files
+  const fc=document.getElementById("files");fc.innerHTML="";
+  for(const c of "abcdefgh"){const s=document.createElement("span");s.textContent=c;fc.appendChild(s);}
+  const t=fen.split(" ")[1];
+  document.getElementById("sturn").textContent=t==="w"?"\u2654 Хід білих":"\u265A Хід чорних";
+}
+
+async function click(col,row){
+  if(busy||mode==="pvp"||mode==="puzzle")return;
+  const t=fen.split(" ")[1];
+  
+  if(sel){
+    const mv=hints.find(m=>m.fc===sel[0]&&m.fr===sel[1]&&m.tc===col&&m.tr===row);
+    if(mv){await doMove(mv);sel=null;hints=[];if(mode==="hvp")setTimeout(prologMove,400);return;}
+  }
+  sel=[col,row];hints=[];render();
+  const res=await post("/api/legal_moves",{fen});
+  hints=(res.moves||[]).filter(m=>m.fc===col&&m.fr===row);
+  render();
+}
+
+async function doMove(mv){
+  fenHist.push(fen);
+  const res=await post("/api/apply_move",{fen,move:mv});
+  fen=res.fen;lastMove=mv;
+  const cols="abcdefgh";
+  hist.push(cols[mv.fc-1]+mv.fr+"\u2192"+cols[mv.tc-1]+mv.tr);
+  document.getElementById("hist").innerHTML=hist.map((h,i)=>`<span>${i+1}. ${h}</span>`).join(" ");
+  document.getElementById("hist").scrollTop=9999;
+  render();
+  if(res.status==="checkmate"){
+
+  const winner=fen.split(" ")[1]==="b"?"\u2654 Білі перемогли!":"\u265A Чорні перемогли!";
+
+  msg("МАТ!");busy=true;
+
+  showModal("\u265A МАТ!", winner);
+
+}
+  else if(res.status==="stalemate"){msg("ПАТ! Нічия.");busy=true;showModal("\u2696 ПАТ!","Нічия!");}
+  else msg("");
+}
+
+async function prologMove(){
+  if(busy)return;busy=true;msg("Prolog думає...");
+  try{const res=await post("/api/best_move",{fen,n:N});if(res.found){await doMove(res.move);}else{msg("Немає ходів");}}
+  catch(e){msg("Помилка сервера");}
+  busy=false;
+}
+
+async function pvpStep(){
+  if(mode!=="pvp"||busy)return;
+  busy=true;msg("Prolog думає...");
+  try{
+    const res=await post("/api/best_move",{fen,n:N});
+    if(res.found){await doMove(res.move);busy=false;setTimeout(pvpStep,600);}
+    else{msg("Гру завершено");busy=false;}
+  }catch(e){msg("Помилка");busy=false;}
+}
+
+async function findMate(){
+  msg("Шукаю мат в "+N+" ходів...");
+  const t0=Date.now();
+  const res=await post("/api/mate",{fen,n:N});
+  const dt=((Date.now()-t0)/1000).toFixed(3);
+  if(res.found){const cols="abcdefgh",m=res.move;msg("Мат в "+N+"! "+cols[m.fc-1]+m.fr+"\u2192"+cols[m.tc-1]+m.tr+" ("+dt+"с)");}
+  else msg("Мату в "+N+" не знайдено ("+dt+"с)");
+}
+
+async function newGame(){fen="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";fenHist=[fen];hist=[];sel=null;hints=[];lastMove=null;busy=false;document.getElementById("hist").innerHTML="";render();msg("Нова гра");}
+async function loadFen(){fen=document.getElementById("fen-in").value.trim();fenHist=[fen];hist=[];sel=null;hints=[];lastMove=null;document.getElementById("hist").innerHTML="";render();msg("Позицію завантажено");}
+function undoMove(){if(fenHist.length<=1){msg("Немає ходів");return;}fenHist.pop();fen=fenHist[fenHist.length-1];hist.pop();sel=null;hints=[];lastMove=null;document.getElementById("hist").innerHTML=hist.map((h,i)=>`<span>${i+1}. ${h}</span>`).join(" ");render();msg("Хід скасовано");}
+function resign(){const t=fen.split(" ")[1];msg((t==="w"?"Білі":"Чорні")+" здались.");busy=true;}
+function msg(m){document.getElementById("smsg").textContent=m;}
+
+
+render();
+</script></body></html>
